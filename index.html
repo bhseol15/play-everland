@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>에버랜드 - 놀이기구 아케이드</title>
+<style>
+  :root{
+    --bg:#dff3ff; --grass:#bfe8a3; --grass2:#a9dd8c; --path:#f5e6c8; --path2:#e8d3a8;
+    --pink:#ff8fb1; --yellow:#ffd766; --blue:#7ec8ff; --purple:#b79cff; --green:#7ad38e;
+    --ink:#3b3b58; --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:var(--bg);font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;color:var(--ink);overflow:hidden;user-select:none}
+  #app{position:fixed;inset:0;display:flex;flex-direction:column}
+
+  /* 상단 바 */
+  #topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fff;box-shadow:0 2px 10px rgba(60,60,100,.12);z-index:5}
+  #topbar h1{font-size:18px;display:flex;align-items:center;gap:8px}
+  #topbar h1 .logo{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--pink),var(--yellow));display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+  #hint{font-size:12px;color:#7a7a99;background:#f3f3fb;padding:6px 10px;border-radius:20px;white-space:nowrap}
+  @media (max-width:480px){#hint{display:none}}
+
+  /* 지도 캔버스 */
+  #stage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  canvas{display:block;border-radius:14px;box-shadow:0 8px 30px rgba(60,80,120,.18);cursor:pointer;touch-action:none}
+
+  /* 말풍선 안내 */
+  #toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:#fff;padding:8px 16px;border-radius:30px;font-size:14px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.12);opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+  #toast.show{opacity:1}
+
+  /* 소개 화면 */
+  #intro{position:fixed;inset:0;background:rgba(40,40,80,.45);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+  #intro.open{display:flex;animation:fade .25s}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .card{background:var(--card);border-radius:28px;width:min(520px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);animation:pop .3s cubic-bezier(.2,1.4,.5,1)}
+  @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+  .card .art{height:240px;border-radius:28px 28px 0 0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  .card .art svg{width:100%;height:100%}
+  .card .body{padding:20px 24px 24px}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;color:#fff;margin-bottom:8px}
+  .card h2{font-size:26px;margin-bottom:6px}
+  .card p{font-size:15px;line-height:1.6;color:#5c5c7a;margin-bottom:14px}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+  .meta div{background:#f5f5fd;border-radius:14px;padding:8px 12px;font-size:13px}
+  .meta b{display:block;font-size:11px;color:#9a9ab8;font-weight:700;margin-bottom:2px}
+  .btns{display:flex;gap:10px}
+  .btn{flex:1;border:none;border-radius:18px;padding:14px;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;transition:transform .1s}
+  .btn:active{transform:scale(.96)}
+  .btn.primary{background:var(--pink);color:#fff;box-shadow:0 5px 0 #e0658f}
+  .btn.primary:disabled{background:#d8d8e6;box-shadow:0 5px 0 #b9b9cc;cursor:not-allowed;color:#fff}
+  .btn.ghost{background:#f0f0fa;color:var(--ink);box-shadow:0 5px 0 #d2d2e2}
+
+  /* 미니게임 오버레이 (iframe) */
+  #gameWrap{position:fixed;inset:0;background:#1e1e34;display:none;flex-direction:column;z-index:40}
+  #gameWrap.open{display:flex}
+  #gameBar{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:2}
+  #gameBar b{font-size:15px}
+  #gameBar button{border:none;background:#f0f0fa;color:var(--ink);font-weight:800;font-family:inherit;padding:8px 14px;border-radius:14px;cursor:pointer;box-shadow:0 3px 0 #d2d2e2}
+  #gameFrame{flex:1;width:100%;border:0;background:#fff}
+  /* 결과 카드 */
+  #result{position:fixed;inset:0;background:rgba(30,30,60,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:16px;z-index:50}
+  #result.open{display:flex;animation:fade .25s}
+  #result .card{width:min(420px,100%);text-align:center;padding:28px 24px 24px}
+  #result .score{font-size:48px;font-weight:900;color:var(--pink);margin:6px 0}
+  #result .best{font-size:13px;color:#9a9ab8;margin-bottom:18px}
+  #result .rank{display:inline-block;background:var(--yellow);color:#6b4e00;font-weight:900;padding:4px 14px;border-radius:20px;font-size:14px}
+
+  /* 시작 화면 */
+  #splash{position:fixed;inset:0;background:linear-gradient(160deg,#ffe3ec,#dff3ff 50%,#e9ffe0);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:30;text-align:center;padding:20px}
+  #splash .big{font-size:52px;font-weight:900;letter-spacing:-1px;background:linear-gradient(90deg,#ff6f9c,#ffb347,#4fc3f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #splash .sub{font-size:16px;color:#7a7a99;margin:8px 0 28px}
+  #splash .btn{flex:none;padding:16px 44px;font-size:20px}
+  #splash .deco{font-size:60px;margin-bottom:10px;animation:bounce 1.6s infinite}
+  @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  .ver{position:absolute;bottom:12px;font-size:11px;color:#a8a8c4}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1><span class="logo">🎡</span>에버랜드</h1>
+    <div id="hint">놀이기구를 클릭하면 캐릭터가 걸어가요!</div>
+  </div>
+  <div id="stage">
+    <canvas id="map"></canvas>
+    <div id="toast"></div>
+  </div>
+</div>
+
+<!-- 소개 화면 -->
+<div id="intro">
+  <div class="card">
+    <div class="art" id="introArt"></div>
+    <div class="body">
+      <span class="tag" id="introTag"></span>
+      <h2 id="introName"></h2>
+      <p id="introDesc"></p>
+      <div class="meta" id="introMeta"></div>
+      <div class="btns">
+        <button class="btn ghost" id="btnBack">🗺️ 지도로 돌아가기</button>
+        <button class="btn primary" id="btnPlay">🎮 게임 시작</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 미니게임 오버레이 -->
+<div id="gameWrap">
+  <div id="gameBar"><b id="gameTitle"></b><button id="btnQuit">✕ 그만하기</button></div>
+  <iframe id="gameFrame" allow="autoplay; fullscreen"></iframe>
+</div>
+
+<!-- 결과 화면 -->
+<div id="result">
+  <div class="card">
+    <div style="font-size:40px">🎉</div>
+    <h2 id="resultName"></h2>
+    <div class="score" id="resultScore">0</div>
+    <div><span class="rank" id="resultRank"></span></div>
+    <div class="best" id="resultBest"></div>
+    <div class="btns">
+      <button class="btn ghost" id="btnResultMap">🗺️ 지도로</button>
+      <button class="btn primary" id="btnRetry">🔁 다시 하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 시작 화면 -->
+<div id="splash">
+  <div class="deco">🎢</div>
+  <div class="big">에버랜드</div>
+  <div class="sub">놀이기구 아케이드 · 지도를 돌아다니며 기구를 골라보세요</div>
+  <button class="btn primary" id="btnStart">입장하기</button>
+  <div class="ver">v3.0 · 미니게임 플러그인 허브</div>
+</div>
+
+<script>
+/* =========================================================
+   에버랜드 v1 - 탑다운 지도 + 클릭 자동이동 + 기구 소개 화면
+   ========================================================= */
+const W = 1000, H = 700;            // 논리 좌표계
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+let scale = 1, offX = 0, offY = 0;
+
+/* ---------- 테마 구역 (실제 에버랜드 가이드맵 배치 기준) ----------
+   정문(글로벌페어) 우하단 → 북쪽 아메리칸 어드벤처 → 북쪽 매직랜드
+   → 서쪽 유러피언 어드벤처(T익스프레스) → 남서쪽 주토피아(동물원) */
+const ZONES = [
+  { name:'글로벌페어',        x:740, y:380, w:250, h:310, fill:'#ffe9c2', stroke:'#f3c76f' },
+  { name:'아메리칸 어드벤처', x:560, y:90,  w:430, h:280, fill:'#ffd9e3', stroke:'#ff9ab8' },
+  { name:'매직랜드',          x:300, y:10,  w:250, h:260, fill:'#e6dcff', stroke:'#b79cff' },
+  { name:'유러피언 어드벤처', x:10,  y:10,  w:280, h:320, fill:'#d8f0ff', stroke:'#7ec8ff' },
+  { name:'주토피아',          x:10,  y:340, w:720, h:350, fill:'#d9f3c9', stroke:'#7ad38e' },
+];
+
+/* ---------- 놀이기구 데이터 ---------- */
+const RIDES = [
+  { id:'texpress',  name:'T익스프레스', tag:'롤러코스터', color:'#ff8fb1', x:150, y:150, w:170, h:120, icon:'coaster',
+    desc:'아시아 최초 목재 롤러코스터! 77도 경사에서 떨어지는 짜릿함을 느껴보세요.', thrill:5, wait:'60분', type:'스릴' },
+  { id:'safari',    name:'사파리 월드', tag:'동물원', color:'#ffb347', x:330, y:570, w:170, h:130, icon:'safari',
+    desc:'사자, 호랑이, 곰이 사는 초원을 버스로 누비는 야생 탐험.', thrill:2, wait:'30분', type:'탐험' },
+  { id:'panda',     name:'판다월드', tag:'동물원', color:'#9ad87a', x:570, y:570, w:150, h:110, icon:'panda',
+    desc:'푸바오 가족이 대나무를 먹는 모습을 가까이서 볼 수 있어요.', thrill:1, wait:'40분', type:'힐링' },
+  { id:'amazon',    name:'아마존 익스프레스', tag:'급류 래프팅', color:'#5ec8e8', x:430, y:410, w:160, h:120, icon:'raft',
+    desc:'거센 물살을 따라 빙글빙글! 옷이 젖어도 즐거운 급류 타기.', thrill:3, wait:'25분', type:'워터' },
+  { id:'lostvalley',name:'로스트밸리', tag:'정글 탐험', color:'#b79cff', x:150, y:500, w:160, h:120, icon:'jeep',
+    desc:'수륙양용차를 타고 기린과 코끼리를 만나는 정글 탐험.', thrill:2, wait:'45분', type:'탐험' },
+  { id:'hurricane', name:'허리케인', tag:'회전 어트랙션', color:'#7ec8ff', x:665, y:230, w:140, h:120, icon:'hurricane',
+    desc:'거대한 추가 360도로 돌아가는 어지러운 스릴 머신!', thrill:4, wait:'20분', type:'스릴' },
+  { id:'carousel',  name:'회전목마', tag:'클래식', color:'#ffd766', x:365, y:150, w:120, h:110, icon:'carousel',
+    desc:'알록달록 말을 타고 빙글빙글, 모두가 사랑하는 클래식 기구.', thrill:1, wait:'10분', type:'힐링' },
+  { id:'ferris',    name:'관람차', tag:'클래식', color:'#ff9d76', x:485, y:150, w:110, h:110, icon:'ferris',
+    desc:'하늘 높이 올라 에버랜드 전경을 한눈에! 밤에는 야경이 최고.', thrill:1, wait:'15분', type:'힐링' },
+  { id:'bumper',    name:'범퍼카', tag:'아케이드', color:'#ff7a7a', x:870, y:230, w:140, h:90, icon:'bumper',
+    desc:'쿵쿵! 친구들과 부딪히며 달리는 신나는 범퍼카.', thrill:2, wait:'15분', type:'아케이드' },
+  { id:'snack',     name:'간식 코너', tag:'먹거리', color:'#ffc48a', x:930, y:580, w:110, h:90, icon:'snack',
+    desc:'츄러스, 솜사탕, 핫도그! 달콤한 간식으로 에너지 충전.', thrill:0, wait:'5분', type:'휴식' },
+  { id:'shop',      name:'굿즈 샵', tag:'기념품', color:'#c9a0ff', x:930, y:460, w:110, h:90, icon:'shop',
+    desc:'레니, 라라 인형과 귀여운 헤드밴드가 가득한 기념품 가게.', thrill:0, wait:'-', type:'휴식' },
+  { id:'parade',    name:'퍼레이드', tag:'공연', color:'#ff6fb5', x:760, y:330, w:180, h:70, icon:'parade',
+    desc:'음악과 함께 화려한 꽃차가 지나가는 에버랜드의 상징 퍼레이드.', thrill:1, wait:'공연 시간', type:'공연' },
+];
+
+/* 캐릭터 */
+const player = { x:870, y:640, tx:870, ty:640, speed:3.2, moving:false, target:null, frame:0, dir:1 };
+
+/* ---------- 캔버스 리사이즈 (반응형) ---------- */
+function resize(){
+  const stage = document.getElementById('stage');
+  const pad = 12;
+  const sw = stage.clientWidth - pad*2, sh = stage.clientHeight - pad*2;
+  scale = Math.min(sw / W, sh / H);
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = (W*scale)+'px';
+  canvas.style.height = (H*scale)+'px';
+  canvas.width = W*scale*dpr; canvas.height = H*scale*dpr;
+  ctx.setTransform(scale*dpr,0,0,scale*dpr,0,0);
+}
+window.addEventListener('resize', resize);
+
+/* ---------- 입력 ---------- */
+function toLogical(e){
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+  const cy = (e.touches ? e.touches[0].clientY : e.clientY) - r.top;
+  return { x: cx/scale, y: cy/scale };
+}
+function hitRide(p){
+  return RIDES.find(r => p.x>=r.x-r.w/2 && p.x<=r.x+r.w/2 && p.y>=r.y-r.h/2 && p.y<=r.y+r.h/2);
+}
+let hover = null;
+canvas.addEventListener('mousemove', e => { hover = hitRide(toLogical(e)); canvas.style.cursor = hover?'pointer':'default'; });
+canvas.addEventListener('click', e => onTap(toLogical(e)));
+canvas.addEventListener('touchstart', e => { e.preventDefault(); onTap(toLogical(e)); }, {passive:false});
+
+function onTap(p){
+  if (document.getElementById('intro').classList.contains('open')) return;
+  const ride = hitRide(p);
+  if (ride){
+    player.target = ride;
+    player.tx = ride.x; player.ty = ride.y + ride.h/2 + 18;   // 입구 (기구 아래쪽)
+    toast(`🚶 ${ride.name}(으)로 이동 중…`);
+  } else {
+    player.target = null;
+    player.tx = Math.max(20, Math.min(W-20, p.x));
+    player.ty = Math.max(20, Math.min(H-20, p.y));
+  }
+  player.moving = true;
+}
+
+function toast(msg, ms=1800){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+/* ---------- 업데이트 ---------- */
+function update(){
+  if (!player.moving) return;
+  const dx = player.tx - player.x, dy = player.ty - player.y;
+  const d = Math.hypot(dx,dy);
+  if (d < player.speed){
+    player.x = player.tx; player.y = player.ty; player.moving = false;
+    if (player.target){ const r = player.target; player.target = null; setTimeout(()=>openIntro(r), 200); }
+    return;
+  }
+  player.x += dx/d*player.speed; player.y += dy/d*player.speed;
+  player.dir = dx < 0 ? -1 : 1;
+  player.frame += 0.25;
+}
+
+/* ---------- 그리기 ---------- */
+let t = 0;
+function draw(){
+  t += 0.02;
+  // 잔디
+  ctx.fillStyle = '#bfe8a3'; ctx.fillRect(0,0,W,H);
+  // 잔디 무늬
+  ctx.fillStyle = '#b3e196';
+  for (let i=0;i<40;i++){ const x=(i*137)%W, y=(i*251)%H; ctx.beginPath(); ctx.ellipse(x,y,26,14,0,0,Math.PI*2); ctx.fill(); }
+  // 테마 구역
+  ZONES.forEach(z=>{
+    ctx.fillStyle = z.fill; rr(z.x,z.y,z.w,z.h,26); ctx.fill();
+    ctx.strokeStyle = z.stroke; ctx.lineWidth = 3; ctx.setLineDash([12,8]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = z.stroke; ctx.font='bold 13px sans-serif'; ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText(z.name, z.x+z.w-14, z.y+10);
+  });
+  // 호수 (주토피아 안, 로스트밸리 옆)
+  ctx.fillStyle = '#9fdcf5'; rr(130,360,150,60,30); ctx.fill();
+  ctx.fillStyle = '#b8e7fb'; rr(150,372,90,26,13); ctx.fill();
+
+  // 길 : 정문 → 글로벌페어 → 아메리칸 → 매직랜드 → 유러피언 → 주토피아 순환
+  ctx.strokeStyle = '#f3e4c4'; ctx.lineWidth = 40; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.beginPath();
+  ctx.moveTo(870,680); ctx.lineTo(870,560); ctx.lineTo(760,400); ctx.lineTo(760,120); // 정문 → 글로벌 광장 → 퍼레이드 길(아메리칸)
+  ctx.lineTo(560,120); ctx.lineTo(560,230); ctx.lineTo(300,230);                  // 매직랜드
+  ctx.lineTo(300,330); ctx.lineTo(60,330); ctx.lineTo(60,640); ctx.lineTo(560,640); // 유러피언 → 주토피아 순환
+  ctx.moveTo(300,330); ctx.lineTo(300,480); ctx.lineTo(560,480); ctx.lineTo(760,400); // 주토피아 가로길 → 글로벌 광장
+  ctx.stroke();
+  ctx.strokeStyle = '#e2cfa4'; ctx.lineWidth = 2; ctx.setLineDash([10,10]); ctx.stroke(); ctx.setLineDash([]);
+
+  // 정문 게이트
+  ctx.fillStyle='#ff8fb1'; rr(820,660,100,22,8); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 12px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('정문 입구', 870, 671);
+
+  // 나무
+  const trees = [[40,60],[250,60],[40,290],[250,290],[330,40],[520,40],[590,110],[960,110],[600,340],[960,340],[100,440],[660,540],[120,660],[260,660],[720,620],[970,660]];
+  trees.forEach(([x,y],i)=>tree(x,y, i%2?'#6cc37a':'#53b56a'));
+
+  // 놀이기구
+  RIDES.forEach(r => drawRide(r, hover===r));
+
+  // 캐릭터
+  drawPlayer();
+}
+
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
+function tree(x,y,c){
+  ctx.fillStyle='rgba(0,0,0,.08)'; ctx.beginPath(); ctx.ellipse(x+3,y+18,18,8,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#8d6744'; ctx.fillRect(x-3,y+4,6,14);
+  ctx.fillStyle=c; ctx.beginPath(); ctx.arc(x,y,16,0,Math.PI*2); ctx.arc(x-10,y+6,11,0,Math.PI*2); ctx.arc(x+10,y+6,11,0,Math.PI*2); ctx.fill();
+}
+
+function drawRide(r, hl){
+  const x=r.x-r.w/2, y=r.y-r.h/2;
+  // 그림자
+  ctx.fillStyle='rgba(0,0,0,.10)'; rr(x+4,y+6,r.w,r.h,22); ctx.fill();
+  // 구역
+  ctx.fillStyle = hl ? '#ffffff' : '#fff8ef'; rr(x,y,r.w,r.h,22); ctx.fill();
+  ctx.lineWidth = hl ? 5 : 3; ctx.strokeStyle = r.color; ctx.stroke();
+  // 아이콘
+  ctx.save(); ctx.translate(r.x, r.y-8);
+  const s = Math.min(r.w,r.h)/110;
+  ctx.scale(s,s);
+  ICONS[r.icon](ctx, t);
+  ctx.restore();
+  // 이름표
+  ctx.fillStyle = r.color; rr(r.x-r.w/2+10, y+r.h-26, r.w-20, 20, 10); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 13px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(r.name, r.x, y+r.h-16);
+  // 입구 표시
+  ctx.fillStyle = r.color; ctx.beginPath(); ctx.moveTo(r.x-7,y+r.h+2); ctx.lineTo(r.x+7,y+r.h+2); ctx.lineTo(r.x,y+r.h+10); ctx.fill();
+}
+
+/* 지도용 미니 아이콘 (플랫) */
+const ICONS = {
+  coaster(c,t){ c.strokeStyle='#8d6744'; c.lineWidth=5; c.beginPath(); c.moveTo(-50,20); c.quadraticCurveTo(-25,-40,0,10); c.quadraticCurveTo(25,50,50,-20); c.stroke();
+    c.fillStyle='#ff5c8a'; rr.call(null,-12,-4,24,12,4); c.fill(); c.fillStyle='#ff8fb1'; c.beginPath(); c.arc(-4,-8,5,0,7); c.arc(6,-8,5,0,7); c.fill(); },
+  safari(c){ c.fillStyle='#ffb347'; rr(-40,-15,80,34,8); c.fill(); c.fillStyle='#fff'; [-30,-10,10].forEach(x=>{rr(x,-8,16,12,3); c.fill();}); c.fillStyle='#444'; c.beginPath(); c.arc(-24,22,8,0,7); c.arc(24,22,8,0,7); c.fill();
+    c.fillStyle='#f0b254'; c.beginPath(); c.arc(40,-25,10,0,7); c.fill(); c.fillStyle='#c98b2e'; c.beginPath(); c.arc(40,-25,14,0,7); c.arc(40,-25,10,0,7,true); c.fill(); },
+  panda(c){ c.fillStyle='#fff'; c.beginPath(); c.arc(0,0,30,0,7); c.fill(); c.fillStyle='#222'; c.beginPath(); c.arc(-22,-22,11,0,7); c.arc(22,-22,11,0,7); c.fill();
+    c.beginPath(); c.ellipse(-11,-3,8,10,0.4,0,7); c.ellipse(11,-3,8,10,-0.4,0,7); c.fill(); c.fillStyle='#fff'; c.beginPath(); c.arc(-10,-4,3,0,7); c.arc(10,-4,3,0,7); c.fill(); c.fillStyle='#222'; c.beginPath(); c.ellipse(0,10,5,3,0,0,7); c.fill();
+    c.strokeStyle='#6cc37a'; c.lineWidth=4; c.beginPath(); c.moveTo(38,20); c.lineTo(38,-20); c.stroke(); },
+  raft(c,t){ c.fillStyle='#5ec8e8'; rr(-50,5,100,30,10); c.fill(); c.strokeStyle='#fff'; c.lineWidth=3; c.beginPath(); for(let i=-45;i<45;i+=15){ c.moveTo(i,18+Math.sin(t*3+i)*3); c.lineTo(i+8,18+Math.sin(t*3+i)*3);} c.stroke();
+    c.fillStyle='#ffd766'; c.beginPath(); c.arc(0,0,22,0,7); c.fill(); c.fillStyle='#ff8fb1'; c.beginPath(); c.arc(0,0,12,0,7); c.fill(); c.fillStyle='#3b3b58'; c.beginPath(); c.arc(-5,-3,2.5,0,7); c.arc(5,-3,2.5,0,7); c.fill(); },
+  jeep(c){ c.fillStyle='#7ab86a'; rr(-40,-5,80,28,8); c.fill(); c.fillStyle='#b79cff'; rr(-28,-25,45,22,6); c.fill(); c.fillStyle='#cfefff'; rr(-22,-20,16,12,3); c.fill(); rr(0,-20,12,12,3); c.fill();
+    c.fillStyle='#333'; c.beginPath(); c.arc(-24,25,9,0,7); c.arc(24,25,9,0,7); c.fill(); c.fillStyle='#ffd766'; c.beginPath(); c.arc(42,-28,8,0,7); c.fill(); },
+  hurricane(c,t){ c.strokeStyle='#7ec8ff'; c.lineWidth=5; c.beginPath(); c.moveTo(-30,35); c.lineTo(0,-30); c.lineTo(30,35); c.stroke(); c.save(); c.translate(0,-28); c.rotate(t*2);
+    c.strokeStyle='#4a9ddc'; c.lineWidth=5; c.beginPath(); c.moveTo(0,0); c.lineTo(0,40); c.stroke(); c.fillStyle='#ff8fb1'; rr(-16,36,32,14,6); c.fill(); c.restore(); c.fillStyle='#4a9ddc'; c.beginPath(); c.arc(0,-28,7,0,7); c.fill(); },
+  carousel(c,t){ c.fillStyle='#ffd766'; c.beginPath(); c.moveTo(-45,-5); c.lineTo(0,-40); c.lineTo(45,-5); c.closePath(); c.fill(); c.fillStyle='#ff8fb1'; rr(-45,-5,90,8,3); c.fill();
+    c.fillStyle='#fff'; rr(-40,3,80,30,6); c.fill(); const cols=['#ff8fb1','#7ec8ff','#b79cff','#7ad38e']; for(let i=0;i<4;i++){ const px=-30+i*20+Math.sin(t*2+i)*2; c.fillStyle=cols[i]; c.fillRect(px-2,3,4,30); c.beginPath(); c.arc(px,14+Math.sin(t*4+i)*4,6,0,7); c.fill(); } },
+  ferris(c,t){ c.save(); c.rotate(t*0.5); c.strokeStyle='#ff9d76'; c.lineWidth=4; c.beginPath(); c.arc(0,0,38,0,7); c.stroke(); for(let i=0;i<8;i++){ const a=i*Math.PI/4; c.beginPath(); c.moveTo(0,0); c.lineTo(Math.cos(a)*38,Math.sin(a)*38); c.stroke(); c.fillStyle=['#ff8fb1','#7ec8ff','#ffd766','#7ad38e'][i%4]; c.beginPath(); c.arc(Math.cos(a)*38,Math.sin(a)*38,7,0,7); c.fill(); } c.restore(); c.fillStyle='#ff9d76'; c.beginPath(); c.arc(0,0,6,0,7); c.fill(); },
+  bumper(c,t){ c.fillStyle='#444'; rr(-45,-15,90,45,10); c.fill(); const b=(x,y,col)=>{ c.fillStyle=col; rr(x-16,y-10,32,20,8); c.fill(); c.fillStyle='#3b3b58'; c.beginPath(); c.arc(x,y-4,5,0,7); c.fill(); };
+    b(-20+Math.sin(t*3)*4,5,'#ff7a7a'); b(20-Math.sin(t*3)*4,5,'#7ec8ff'); },
+  snack(c){ c.fillStyle='#ffc48a'; rr(-40,-5,80,35,8); c.fill(); c.fillStyle='#ff6f9c'; rr(-44,-15,88,12,4); c.fill(); c.fillStyle='#fff'; for(let x=-36;x<40;x+=16) c.fillRect(x,-15,8,12);
+    c.fillStyle='#ff8fb1'; c.beginPath(); c.arc(-18,-32,13,0,7); c.fill(); c.fillStyle='#fff'; c.fillRect(-20,-22,4,16); c.fillStyle='#f7c873'; rr(8,-34,26,10,4); c.fill(); c.fillStyle='#e85d5d'; c.fillRect(12,-32,18,3); },
+  shop(c){ c.fillStyle='#c9a0ff'; c.beginPath(); c.moveTo(-45,-10); c.lineTo(0,-38); c.lineTo(45,-10); c.closePath(); c.fill(); c.fillStyle='#fff'; rr(-40,-10,80,40,6); c.fill(); c.fillStyle='#b79cff'; rr(-10,5,20,25,4); c.fill();
+    c.fillStyle='#ffd766'; c.beginPath(); c.arc(-24,8,9,0,7); c.fill(); c.fillStyle='#ff8fb1'; c.beginPath(); c.arc(24,8,9,0,7); c.fill(); },
+  parade(c,t){ c.fillStyle='#ff6fb5'; rr(-50,-5,100,24,10); c.fill(); c.fillStyle='#ffd766'; rr(-30,-25,60,22,8); c.fill(); for(let i=0;i<5;i++){ c.fillStyle=['#ff8fb1','#7ec8ff','#b79cff','#7ad38e','#ffd766'][i]; c.beginPath(); c.arc(-40+i*20, -40+Math.sin(t*3+i)*5, 6,0,7); c.fill(); }
+    c.fillStyle='#444'; c.beginPath(); c.arc(-30,22,7,0,7); c.arc(30,22,7,0,7); c.fill(); },
+};
+
+function drawPlayer(){
+  const {x,y} = player;
+  const bob = player.moving ? Math.abs(Math.sin(player.frame))*4 : 0;
+  ctx.fillStyle='rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(x,y+14,12,5,0,0,Math.PI*2); ctx.fill();
+  ctx.save(); ctx.translate(x, y-bob); ctx.scale(player.dir,1);
+  // 몸
+  ctx.fillStyle='#ff8fb1'; rr(-9,-6,18,20,7); ctx.fill();
+  // 다리
+  const leg = player.moving ? Math.sin(player.frame)*4 : 0;
+  ctx.fillStyle='#3b3b58'; ctx.fillRect(-7,12+leg,5,6); ctx.fillRect(2,12-leg,5,6);
+  // 머리
+  ctx.fillStyle='#ffe0c4'; ctx.beginPath(); ctx.arc(0,-14,11,0,Math.PI*2); ctx.fill();
+  // 머리띠 (귀)
+  ctx.fillStyle='#ffd766'; ctx.beginPath(); ctx.arc(-8,-23,5,0,7); ctx.arc(8,-23,5,0,7); ctx.fill();
+  // 눈
+  ctx.fillStyle='#3b3b58'; ctx.beginPath(); ctx.arc(3,-15,1.8,0,7); ctx.arc(8,-15,1.8,0,7); ctx.fill();
+  ctx.restore();
+}
+
+/* ---------- 소개 화면 (플랫 SVG 일러스트) ---------- */
+const ART = {
+  coaster:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#dff3ff"/><circle cx="420" cy="60" r="30" fill="#ffd766"/><ellipse cx="100" cy="70" rx="50" ry="20" fill="#fff"/><ellipse cx="300" cy="50" rx="40" ry="16" fill="#fff"/>
+    <rect y="190" width="520" height="50" fill="#bfe8a3"/><path d="M0 170 C80 170 100 60 180 60 S260 170 340 170 S430 60 520 110" stroke="#8d6744" stroke-width="10" fill="none"/>
+    <g stroke="#b58d64" stroke-width="5">${[40,100,160,220,280,340,400,460].map(x=>`<line x1="${x}" y1="190" x2="${x}" y2="${x%120===40?120:80}"/>`).join('')}</g>
+    <g transform="translate(180,40)"><rect x="-30" y="0" width="60" height="26" rx="8" fill="#ff5c8a"/><circle cx="-12" cy="-6" r="9" fill="#ffe0c4"/><circle cx="12" cy="-6" r="9" fill="#ffe0c4"/><rect x="-18" y="-20" width="12" height="6" rx="3" fill="#3b3b58"/><rect x="6" y="-20" width="12" height="6" rx="3" fill="#3b3b58"/></g></svg>`,
+  safari:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#ffe9b3"/><circle cx="440" cy="60" r="34" fill="#ff9d76"/><rect y="160" width="520" height="80" fill="#d9c27a"/><ellipse cx="90" cy="170" rx="60" ry="14" fill="#c4ac63"/>
+    <g transform="translate(150,110)"><rect x="-70" y="-10" width="140" height="60" rx="14" fill="#ffb347"/><rect x="-55" y="0" width="30" height="24" rx="5" fill="#fff"/><rect x="-15" y="0" width="30" height="24" rx="5" fill="#fff"/><rect x="25" y="0" width="30" height="24" rx="5" fill="#fff"/><circle cx="-40" cy="55" r="14" fill="#444"/><circle cx="40" cy="55" r="14" fill="#444"/></g>
+    <g transform="translate(400,150)"><circle r="34" fill="#c98b2e"/><circle r="24" fill="#f0b254"/><circle cx="-8" cy="-4" r="3" fill="#333"/><circle cx="8" cy="-4" r="3" fill="#333"/><ellipse cy="8" rx="6" ry="4" fill="#8d4f1c"/></g>
+    <g fill="#6cc37a"><circle cx="40" cy="120" r="22"/><rect x="36" y="130" width="8" height="30" fill="#8d6744"/></g></svg>`,
+  panda:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#e4f7d9"/><g stroke="#7ad38e" stroke-width="10" stroke-linecap="round">${[40,90,430,480].map(x=>`<line x1="${x}" y1="240" x2="${x}" y2="30"/>`).join('')}</g>
+    <g transform="translate(260,140)"><ellipse rx="90" ry="70" fill="#fff"/><circle cx="-65" cy="-55" r="26" fill="#222"/><circle cx="65" cy="-55" r="26" fill="#222"/><ellipse cx="-30" cy="-10" rx="20" ry="26" transform="rotate(20 -30 -10)" fill="#222"/><ellipse cx="30" cy="-10" rx="20" ry="26" transform="rotate(-20 30 -10)" fill="#222"/>
+    <circle cx="-28" cy="-12" r="7" fill="#fff"/><circle cx="28" cy="-12" r="7" fill="#fff"/><ellipse cy="22" rx="12" ry="8" fill="#222"/><path d="M-10 34 Q0 44 10 34" stroke="#222" stroke-width="4" fill="none"/><rect x="40" y="10" width="60" height="12" rx="6" transform="rotate(-30 40 10)" fill="#6cc37a"/></g></svg>`,
+  raft:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#bfe8a3"/><path d="M0 90 C120 40 200 160 320 110 S460 60 520 120 V240 H0Z" fill="#5ec8e8"/><path d="M0 130 C120 90 200 200 320 150 S460 100 520 160 V240 H0Z" fill="#7fd6f0"/>
+    <g stroke="#fff" stroke-width="5" stroke-linecap="round" fill="none"><path d="M40 170 q15 -10 30 0"/><path d="M400 190 q15 -10 30 0"/><path d="M120 200 q15 -10 30 0"/></g>
+    <g transform="translate(260,140)"><circle r="60" fill="#ffd766"/><circle r="38" fill="#ff8fb1"/><g transform="translate(-14,-6)"><circle r="12" fill="#ffe0c4"/><circle cx="-4" cy="-2" r="2" fill="#333"/><circle cx="4" cy="-2" r="2" fill="#333"/></g><g transform="translate(16,2)"><circle r="12" fill="#ffe0c4"/><circle cx="-4" cy="-2" r="2" fill="#333"/><circle cx="4" cy="-2" r="2" fill="#333"/></g></g>
+    <circle cx="80" cy="60" r="22" fill="#6cc37a"/><circle cx="450" cy="40" r="26" fill="#53b56a"/></svg>`,
+  jeep:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#d9f5c6"/><g fill="#53b56a"><circle cx="60" cy="80" r="40"/><circle cx="460" cy="70" r="46"/><circle cx="260" cy="40" r="30"/></g><rect y="170" width="520" height="70" fill="#a9dd8c"/>
+    <g transform="translate(220,140)"><rect x="-90" y="-10" width="180" height="50" rx="12" fill="#7ab86a"/><rect x="-60" y="-50" width="100" height="44" rx="10" fill="#b79cff"/><rect x="-50" y="-42" width="36" height="26" rx="5" fill="#cfefff"/><rect x="0" y="-42" width="30" height="26" rx="5" fill="#cfefff"/><circle cx="-55" cy="45" r="18" fill="#333"/><circle cx="55" cy="45" r="18" fill="#333"/></g>
+    <g transform="translate(420,150)"><rect x="-6" y="-70" width="12" height="80" fill="#f2c15a"/><circle cx="0" cy="-78" r="14" fill="#f2c15a"/><circle cx="-5" cy="-80" r="2" fill="#333"/><rect x="-10" y="-20" width="12" height="8" fill="#b5873c"/><rect x="4" y="-50" width="12" height="8" fill="#b5873c"/></g></svg>`,
+  hurricane:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#dff3ff"/><rect y="200" width="520" height="40" fill="#bfe8a3"/><g stroke="#7ec8ff" stroke-width="14" stroke-linecap="round"><line x1="200" y1="200" x2="260" y2="60"/><line x1="320" y1="200" x2="260" y2="60"/></g>
+    <g transform="translate(260,60) rotate(35)"><rect x="-8" y="0" width="16" height="110" fill="#4a9ddc"/><rect x="-50" y="105" width="100" height="30" rx="12" fill="#ff8fb1"/><g fill="#ffe0c4"><circle cx="-30" cy="100" r="9"/><circle cx="0" cy="100" r="9"/><circle cx="30" cy="100" r="9"/></g></g>
+    <circle cx="260" cy="60" r="16" fill="#4a9ddc"/><g fill="#ffd766"><circle cx="70" cy="50" r="6"/><circle cx="450" cy="90" r="5"/><circle cx="120" cy="120" r="4"/><circle cx="420" cy="40" r="4"/></g></svg>`,
+  carousel:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#fff3d6"/><rect y="200" width="520" height="40" fill="#bfe8a3"/>
+    <g transform="translate(260,0)"><path d="M-130 80 L0 20 L130 80Z" fill="#ffd766"/><rect x="-130" y="78" width="260" height="14" rx="6" fill="#ff8fb1"/><rect x="-120" y="92" width="240" height="100" rx="10" fill="#fff"/>
+    ${[-90,-45,0,45,90].map((x,i)=>`<rect x="${x-3}" y="92" width="6" height="100" fill="${['#ff8fb1','#7ec8ff','#b79cff','#7ad38e','#ffb347'][i]}"/><g transform="translate(${x},${130+(i%2)*14})"><ellipse rx="22" ry="12" fill="${['#ff8fb1','#7ec8ff','#b79cff','#7ad38e','#ffb347'][i]}"/><circle cx="18" cy="-10" r="8" fill="${['#ff8fb1','#7ec8ff','#b79cff','#7ad38e','#ffb347'][i]}"/><rect x="-14" y="8" width="5" height="16" fill="#3b3b58"/><rect x="8" y="8" width="5" height="16" fill="#3b3b58"/></g>`).join('')}
+    <rect x="-130" y="190" width="260" height="14" rx="6" fill="#ffb347"/></g></svg>`,
+  ferris:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#ffe3ec"/><circle cx="90" cy="50" r="28" fill="#ffd766"/><rect y="210" width="520" height="30" fill="#bfe8a3"/>
+    <g transform="translate(260,120)"><circle r="92" fill="none" stroke="#ff9d76" stroke-width="8"/><circle r="60" fill="none" stroke="#ff9d76" stroke-width="4"/>${[0,1,2,3,4,5,6,7].map(i=>{const a=i*Math.PI/4;const x=Math.cos(a)*92,y=Math.sin(a)*92;return `<line x1="0" y1="0" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#ff9d76" stroke-width="5"/><rect x="${(x-14).toFixed(1)}" y="${(y-8).toFixed(1)}" width="28" height="24" rx="8" fill="${['#ff8fb1','#7ec8ff','#ffd766','#7ad38e'][i%4]}"/>`}).join('')}<circle r="14" fill="#ff9d76"/><line x1="-60" y1="92" x2="0" y2="0" stroke="#e07a5f" stroke-width="8"/><line x1="60" y1="92" x2="0" y2="0" stroke="#e07a5f" stroke-width="8"/></g></svg>`,
+  bumper:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#3b3b58"/><rect x="30" y="30" width="460" height="180" rx="20" fill="#4f4f74"/><g stroke="#ffd766" stroke-width="3" stroke-dasharray="10 10" fill="none"><rect x="50" y="50" width="420" height="140" rx="14"/></g>
+    <g transform="translate(170,130)"><ellipse rx="60" ry="34" fill="#ff7a7a"/><ellipse rx="40" ry="20" fill="#ffb3b3"/><circle cy="-10" r="14" fill="#ffe0c4"/><rect x="-10" y="-26" width="20" height="6" rx="3" fill="#3b3b58"/></g>
+    <g transform="translate(350,120) rotate(-15)"><ellipse rx="60" ry="34" fill="#7ec8ff"/><ellipse rx="40" ry="20" fill="#c4e6ff"/><circle cy="-10" r="14" fill="#ffe0c4"/><rect x="-10" y="-26" width="20" height="6" rx="3" fill="#3b3b58"/></g>
+    <g fill="#ffd766"><text x="250" y="100" font-size="28" font-weight="900" text-anchor="middle" fill="#ffd766">쿵!</text></g></svg>`,
+  snack:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#fff0e0"/><rect y="200" width="520" height="40" fill="#bfe8a3"/>
+    <g transform="translate(260,0)"><rect x="-140" y="60" width="280" height="140" rx="12" fill="#ffc48a"/><rect x="-150" y="40" width="300" height="34" rx="8" fill="#ff6f9c"/>${[-140,-100,-60,-20,20,60,100].map(x=>`<rect x="${x}" y="40" width="20" height="34" fill="#fff"/>`).join('')}<rect x="-120" y="120" width="240" height="60" rx="8" fill="#fff8ef"/>
+    <g transform="translate(-70,150)"><circle r="26" fill="#ff8fb1"/><circle cx="-8" cy="-6" r="8" fill="#ffb3c9"/><rect x="-4" y="20" width="8" height="30" fill="#fff"/></g>
+    <g transform="translate(10,150)"><rect x="-40" y="-10" width="80" height="22" rx="11" fill="#f7c873"/><rect x="-30" y="-6" width="60" height="8" rx="4" fill="#e85d5d"/></g>
+    <g transform="translate(90,150)"><rect x="-10" y="-30" width="20" height="60" rx="6" fill="#c98b2e"/><g fill="#e3a94f"><circle cx="-6" cy="-20" r="3"/><circle cx="5" cy="-5" r="3"/><circle cx="-4" cy="12" r="3"/></g></g></g></svg>`,
+  shop:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#f0e6ff"/><rect y="200" width="520" height="40" fill="#bfe8a3"/>
+    <g transform="translate(260,0)"><path d="M-150 80 L0 20 L150 80Z" fill="#c9a0ff"/><rect x="-140" y="80" width="280" height="120" rx="8" fill="#fff"/><rect x="-30" y="120" width="60" height="80" rx="8" fill="#b79cff"/><rect x="-120" y="100" width="70" height="60" rx="8" fill="#f5f0ff"/><rect x="50" y="100" width="70" height="60" rx="8" fill="#f5f0ff"/>
+    <g transform="translate(-85,130)"><circle r="16" fill="#ffd766"/><circle cx="-12" cy="-14" r="6" fill="#ffd766"/><circle cx="12" cy="-14" r="6" fill="#ffd766"/><circle cx="-5" cy="-2" r="2" fill="#333"/><circle cx="5" cy="-2" r="2" fill="#333"/></g>
+    <g transform="translate(85,130)"><circle r="16" fill="#ff8fb1"/><circle cx="-12" cy="-14" r="6" fill="#ff8fb1"/><circle cx="12" cy="-14" r="6" fill="#ff8fb1"/><circle cx="-5" cy="-2" r="2" fill="#333"/><circle cx="5" cy="-2" r="2" fill="#333"/></g>
+    <text x="0" y="62" font-size="20" font-weight="900" text-anchor="middle" fill="#fff">GOODS</text></g></svg>`,
+  parade:`<svg viewBox="0 0 520 240"><rect width="520" height="240" fill="#ffe3f1"/><rect y="200" width="520" height="40" fill="#f5e6c8"/>${[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>`<circle cx="${20+i*45}" cy="${30+(i%3)*18}" r="${5+(i%2)*3}" fill="${['#ff8fb1','#7ec8ff','#ffd766','#7ad38e','#b79cff'][i%5]}"/>`).join('')}
+    <g transform="translate(260,140)"><rect x="-130" y="10" width="260" height="50" rx="20" fill="#ff6fb5"/><rect x="-90" y="-40" width="180" height="54" rx="16" fill="#ffd766"/><g fill="#ff8fb1"><circle cx="-100" cy="20" r="14"/><circle cx="100" cy="20" r="14"/></g><g fill="#fff"><circle cx="-110" cy="38" r="10"/><circle cx="-60" cy="38" r="10"/><circle cx="60" cy="38" r="10"/><circle cx="110" cy="38" r="10"/></g>
+    <g transform="translate(-30,-50)"><circle r="16" fill="#ffe0c4"/><circle cx="-12" cy="-14" r="7" fill="#ffd766"/><circle cx="12" cy="-14" r="7" fill="#ffd766"/><circle cx="-5" cy="-2" r="2" fill="#333"/><circle cx="5" cy="-2" r="2" fill="#333"/></g>
+    <g transform="translate(30,-50)"><circle r="16" fill="#ffe0c4"/><circle cx="-12" cy="-14" r="7" fill="#ff8fb1"/><circle cx="12" cy="-14" r="7" fill="#ff8fb1"/><circle cx="-5" cy="-2" r="2" fill="#333"/><circle cx="5" cy="-2" r="2" fill="#333"/></g>
+    <circle cx="-60" cy="70" r="14" fill="#444"/><circle cx="60" cy="70" r="14" fill="#444"/></g></svg>`,
+};
+
+function openIntro(r){
+  document.getElementById('introArt').innerHTML = ART[r.icon];
+  document.getElementById('introArt').style.background = r.color;
+  const tag = document.getElementById('introTag'); tag.textContent = r.tag; tag.style.background = r.color;
+  document.getElementById('introName').textContent = r.name;
+  document.getElementById('introDesc').textContent = r.desc;
+  const stars = r.thrill>0 ? '★'.repeat(r.thrill)+'☆'.repeat(5-r.thrill) : '없음';
+  const best = getBest(r.id);
+  document.getElementById('introMeta').innerHTML =
+    `<div><b>스릴</b>${stars}</div><div><b>대기시간</b>${r.wait}</div><div><b>종류</b>${r.type}</div>` +
+    (best!=null ? `<div><b>최고 점수</b>🏆 ${best.toLocaleString()}</div>` : '');
+  const play = document.getElementById('btnPlay');
+  play.disabled = false; play.textContent = '🎮 게임 시작';
+  checkGame(r).then(ok => { if(!ok){ play.disabled = true; play.textContent = '🎮 게임 시작 (준비중)'; } });
+  currentRide = r;
+  document.getElementById('intro').classList.add('open');
+}
+
+/* =========================================================
+   미니게임 플러그인 시스템
+   - games/<id>.html 을 iframe 으로 띄운다
+   - 게임은 끝날 때 parent.postMessage({type:'EVERLAND_END', score}) 만 보내면 됨
+   ========================================================= */
+let currentRide = null;
+const gameOK = {};                       // id → true/false 캐시
+function gamePath(r){ return r.game || `games/${r.id}.html`; }
+async function checkGame(r){
+  if (gameOK[r.id] !== undefined) return gameOK[r.id];
+  try {
+    const res = await fetch(gamePath(r), { method:'HEAD', cache:'no-store' });
+    gameOK[r.id] = res.ok;
+  } catch(e){ gameOK[r.id] = false; }     // file:// 등에서는 fetch 불가 → 버튼은 활성 유지
+  if (location.protocol === 'file:') gameOK[r.id] = true;
+  return gameOK[r.id];
+}
+function getBest(id){ const v = localStorage.getItem('everland.best.'+id); return v==null?null:Number(v); }
+function setBest(id, s){ const b = getBest(id); if (b==null || s>b){ localStorage.setItem('everland.best.'+id, s); return true; } return false; }
+
+function launchGame(r){
+  document.getElementById('intro').classList.remove('open');
+  document.getElementById('result').classList.remove('open');
+  document.getElementById('gameTitle').textContent = `${r.name}`;
+  const f = document.getElementById('gameFrame');
+  f.src = gamePath(r) + '?t=' + Date.now();
+  document.getElementById('gameWrap').classList.add('open');
+  f.onload = () => { try { f.contentWindow.postMessage({ type:'EVERLAND_START', ride:r.id, name:r.name }, '*'); } catch(e){} };
+}
+function closeGame(){
+  document.getElementById('gameWrap').classList.remove('open');
+  document.getElementById('gameFrame').src = 'about:blank';
+}
+function showResult(r, score, rank){
+  const isNew = setBest(r.id, score);
+  document.getElementById('resultName').textContent = r.name;
+  document.getElementById('resultScore').textContent = Number(score).toLocaleString();
+  const rk = document.getElementById('resultRank'); rk.textContent = rank ? `랭크 ${rank}` : (isNew?'NEW RECORD!':'클리어'); rk.style.display='inline-block';
+  document.getElementById('resultBest').textContent = isNew ? '🏆 신기록 달성!' : `최고 점수 ${getBest(r.id).toLocaleString()}`;
+  document.getElementById('result').classList.add('open');
+}
+window.addEventListener('message', e => {
+  const d = e.data || {};
+  if (!currentRide) return;
+  if (d.type === 'EVERLAND_END'){ closeGame(); showResult(currentRide, Number(d.score)||0, d.rank); }
+  else if (d.type === 'EVERLAND_QUIT'){ closeGame(); toast('🗺️ 지도로 돌아왔어요'); }
+});
+document.getElementById('btnPlay').addEventListener('click', ()=> currentRide && launchGame(currentRide));
+document.getElementById('btnQuit').addEventListener('click', ()=>{ closeGame(); toast('🗺️ 지도로 돌아왔어요'); });
+document.getElementById('btnResultMap').addEventListener('click', ()=> document.getElementById('result').classList.remove('open'));
+document.getElementById('btnRetry').addEventListener('click', ()=> currentRide && launchGame(currentRide));
+document.getElementById('btnBack').addEventListener('click', ()=>{
+  document.getElementById('intro').classList.remove('open');
+  toast('🗺️ 다음 기구를 골라보세요!');
+});
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  document.getElementById('splash').style.display='none';
+  resize();
+  toast('🎉 에버랜드에 오신 걸 환영해요! 기구를 클릭해 보세요', 2600);
+});
+
+/* ---------- 루프 ---------- */
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+resize(); loop();
+</script>
+</body>
+</html>

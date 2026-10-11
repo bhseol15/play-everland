@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>미니게임 템플릿</title>
+<style>
+  /* ===== 기본 스타일 (마음껏 바꿔도 됨) ===== */
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;font-family:"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;background:#dff3ff;color:#3b3b58;user-select:none}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:20px}
+  .screen.on{display:flex}
+  h1{font-size:34px}
+  p{color:#6b6b8a;line-height:1.6}
+  .btn{border:none;border-radius:18px;padding:14px 36px;font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;background:#ff8fb1;color:#fff;box-shadow:0 5px 0 #e0658f}
+  .btn:active{transform:scale(.96)}
+  /* 플레이 화면 */
+  #hud{position:fixed;top:12px;left:0;right:0;display:flex;justify-content:center;gap:20px;font-weight:800;font-size:18px}
+  #hud span{background:#fff;padding:6px 14px;border-radius:20px;box-shadow:0 3px 10px rgba(0,0,0,.1)}
+  #target{position:absolute;width:80px;height:80px;border-radius:50%;background:#ffd766;border:5px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center;font-size:36px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<!-- ① 시작 화면 -->
+<div class="screen on" id="scrStart">
+  <div style="font-size:60px">🎯</div>
+  <h1>미니게임 제목</h1>
+  <p>여기에 게임 설명을 적어요.<br>예) 10초 동안 나타나는 풍선을 최대한 많이 터뜨리세요!</p>
+  <button class="btn" onclick="startGame()">시작!</button>
+</div>
+
+<!-- ② 플레이 화면 -->
+<div class="screen" id="scrPlay">
+  <div id="hud"><span id="hudTime">⏱ 10</span><span id="hudScore">⭐ 0</span></div>
+  <div id="target">🎈</div>
+</div>
+
+<!-- ③ 결과 화면 (허브 밖에서 단독 실행할 때만 보임) -->
+<div class="screen" id="scrEnd">
+  <div style="font-size:60px">🏁</div>
+  <h1>끝!</h1>
+  <p id="endText"></p>
+  <button class="btn" onclick="startGame()">다시 하기</button>
+</div>
+
+<script>
+/* =========================================================
+   ★ 에버랜드 연결 규칙 — 이 블록은 그대로 두세요 ★
+   ========================================================= */
+const EVERLAND = {
+  inHub: window.parent !== window,                 // 허브(iframe) 안에서 실행 중인지
+  // 게임이 끝나면 이 함수 하나만 호출하면 됩니다. score 는 숫자, rank 는 선택(예:'S','A','B')
+  end(score, rank){
+    if (this.inHub) parent.postMessage({ type:'EVERLAND_END', score:Number(score)||0, rank }, '*');
+    else { document.getElementById('endText').textContent = `점수 ${score}` + (rank?` · 랭크 ${rank}`:''); show('scrEnd'); }
+  },
+  // (선택) 중간에 그만둘 때
+  quit(){ if (this.inHub) parent.postMessage({ type:'EVERLAND_QUIT' }, '*'); else show('scrStart'); }
+};
+// (선택) 허브가 보내주는 시작 신호. 필요 없으면 지워도 됩니다.
+window.addEventListener('message', e => { if (e.data && e.data.type === 'EVERLAND_START') { /* e.data.ride, e.data.name */ } });
+
+/* =========================================================
+   ↓↓↓ 여기부터 자유롭게 게임을 만드세요 (아래는 예시: 풍선 터뜨리기) ↓↓↓
+   ========================================================= */
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on', s.id===id)); }
+
+let score=0, time=10, timer=null;
+const target = document.getElementById('target');
+
+function startGame(){
+  score=0; time=10; updateHud(); moveTarget(); show('scrPlay');
+  clearInterval(timer);
+  timer = setInterval(()=>{ time--; updateHud(); if(time<=0){ clearInterval(timer); finish(); } }, 1000);
+}
+function updateHud(){
+  document.getElementById('hudTime').textContent = '⏱ '+time;
+  document.getElementById('hudScore').textContent = '⭐ '+score;
+}
+function moveTarget(){
+  const w = innerWidth-100, h = innerHeight-160;
+  target.style.left = (10+Math.random()*w)+'px';
+  target.style.top  = (70+Math.random()*h)+'px';
+}
+function hit(e){ e.preventDefault(); if(time<=0) return; score++; updateHud(); moveTarget(); }
+target.addEventListener('mousedown', hit);
+target.addEventListener('touchstart', hit, {passive:false});
+
+function finish(){
+  const rank = score>=20?'S':score>=14?'A':score>=8?'B':'C';
+  EVERLAND.end(score, rank);     // ← 끝날 때 이 한 줄!
+}
+</script>
+</body>
+</html>
